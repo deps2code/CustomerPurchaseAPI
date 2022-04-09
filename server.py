@@ -131,6 +131,29 @@ async def api_list_purchase(request: web.Request) -> web.Response:
         return web.json_response({"status": status, "data": response})
 
 
+# [DELETE] api to remove customer purchases
+@router.delete("/api/v1/purchase/{customer_id}")
+@handle_json_error
+async def api_del_purchase(request: web.Request) -> web.Response:
+    customer_id = request.match_info["customer_id"]
+    req_data = await request.json()
+    purchase_ids = req_data["purchase_ids"]
+    is_delete_all = req_data["delete_all"]
+    db = request.config_dict["DB"]
+
+    if is_delete_all:
+        async with db.execute("DELETE FROM purchases WHERE customer_id = ?", [customer_id]) as cursor:
+            deleted_count = cursor.rowcount
+    else:
+        async with db.execute("DELETE FROM purchases WHERE customer_id = ? and id IN ({seq})".
+                                      format(seq=",".join(["?"] * len(purchase_ids))),
+                              [customer_id, *purchase_ids]) as cursor:
+            deleted_count = cursor.rowcount
+
+    await db.commit()
+    return web.json_response({"status": "ok", "deleted_count": deleted_count})
+
+
 def get_db_path() -> Path:
     here = Path.cwd()
     while not (here / ".git").exists():
