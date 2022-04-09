@@ -15,6 +15,10 @@ To stop the server:
 
 `docker-compose down` 
 
+To run the tests:
+
+`pytest test.py` 
+
 Project Description
 ------------
 
