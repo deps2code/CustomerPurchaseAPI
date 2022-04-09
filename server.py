@@ -100,6 +100,36 @@ async def api_new_purchase(request: web.Request) -> web.Response:
             }
         )
 
+# [GET] api to list customer purchases
+@router.get("/api/v1/purchase/{customer_id}")
+@handle_json_error
+async def api_list_purchase(request: web.Request) -> web.Response:
+    response = []
+    status = "ok"
+    db = request.config_dict["DB"]
+    async with db.execute("SELECT count(*) as count FROM customer where id = ?",
+                          [request.match_info["customer_id"]]) as cursor:
+        async for row in cursor:
+            if row["count"] < 1:
+                status = "failed"
+    await db.commit()
+    if status == "failed":
+        return web.json_response({"status": status, "data": "Customer doesn't exist"})
+    else:
+        async with db.execute("SELECT id, purchase_name, quantity, date_created, last_updated FROM purchases "
+                              "where customer_id = ?", [request.match_info["customer_id"]]) as cursor:
+            async for row in cursor:
+                response.append(
+                    {
+                        "purchase_id": row["id"],
+                        "purchase_name": row["purchase_name"],
+                        "quantity": row["quantity"],
+                        "purchased_on": row["date_created"],
+                        "last_updated_on": row["last_updated"]
+                    }
+                )
+        return web.json_response({"status": status, "data": response})
+
 
 def get_db_path() -> Path:
     here = Path.cwd()
