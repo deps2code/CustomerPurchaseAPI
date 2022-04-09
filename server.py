@@ -26,6 +26,11 @@ def handle_json_error(
 
     return handler
 
+# health check api
+@router.get("/")
+async def root(request: web.Request) -> web.Response:
+    return web.json_response({"name": "Welcome to the purchases server", "healthy": True})
+
 # [POST] api to add new customer
 @router.post("/api/v1/customer")
 @handle_json_error
