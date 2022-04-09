@@ -25,6 +25,14 @@ The web server uses sqlite3 as a default database and have the following functio
 4) Update a customer purchase name and quantity via update customer purchase api
 5) Delete all or selected customer purchases via delete customer purchase api
 
+<br />
+
+When the web server starts it checks for a db.sqlite3 database and if not present, it creates a new database and add the following tables:
+1) purchases
+2) customer
+
+This implementation can be found in the `try_make_db()` in `server.py`
+
 APi Documentation
 ------------
 
@@ -114,7 +122,7 @@ APi Documentation
     "purchase_ids": [3,6]
 }
 ```
-if delete_all is sent as true then it ignores the purchase_ids and delete all purchases for customer
+if `delete_all` is sent as true then it ignores the purchase_ids and delete all purchases for customer
 * Response Body:
 ```json
 {
