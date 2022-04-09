@@ -26,6 +26,24 @@ def handle_json_error(
 
     return handler
 
+
+# function to fetch purchase data from db
+async def fetch_purchase_from_db(db: aiosqlite.Connection, purchase_id: int) -> Dict[str, Any]:
+    async with db.execute(
+            "SELECT id, purchase_name, quantity, date_created, last_updated FROM purchases WHERE id = ?",
+            [purchase_id]) as cursor:
+        row = await cursor.fetchone()
+        if row is None:
+            raise RuntimeError(f"Purchase {purchase_id} doesn't exist")
+        return {
+            "id": purchase_id,
+            "name": row["purchase_name"],
+            "quantity": row["quantity"],
+            "date_created": row["date_created"],
+            "last_updated": row["last_updated"]
+        }
+
+
 # health check api
 @router.get("/")
 async def root(request: web.Request) -> web.Response:
@@ -100,6 +118,7 @@ async def api_new_purchase(request: web.Request) -> web.Response:
             }
         )
 
+
 # [GET] api to list customer purchases
 @router.get("/api/v1/purchase/{customer_id}")
 @handle_json_error
@@ -152,6 +171,45 @@ async def api_del_purchase(request: web.Request) -> web.Response:
 
     await db.commit()
     return web.json_response({"status": "ok", "deleted_count": deleted_count})
+
+
+# [PATCH] api to update customer purchase
+@router.patch("/api/v1/purchase/{purchase_id}")
+@handle_json_error
+async def api_update_purchase(request: web.Request) -> web.Response:
+    purchase_id = request.match_info["purchase_id"]
+    patch_data = await request.json()
+    purchase_name = patch_data["purchase_name"]
+    quantity = patch_data["quantity"]
+
+    db = request.config_dict["DB"]
+    fields = {}
+    if "purchase_name" in patch_data:
+        fields["purchase_name"] = purchase_name
+    if "quantity" in patch_data:
+        fields["quantity"] = quantity
+    fields["last_updated"] = datetime.now(timezone.utc)
+
+    if fields:
+        field_names = ", ".join(f"{name} = ?" for name in fields)
+        field_values = list(fields.values())
+        await db.execute(
+            f"UPDATE purchases SET {field_names} WHERE id = ?", field_values + [purchase_id]
+        )
+        await db.commit()
+    new_purchase = await fetch_purchase_from_db(db, purchase_id)
+    return web.json_response(
+        {
+            "status": "ok",
+            "data": {
+                "id": new_purchase["id"],
+                "purchase_name": new_purchase["name"],
+                "quantity": new_purchase["quantity"],
+                "purchased_on": new_purchase["date_created"],
+                "last_updated_on": new_purchase["last_updated"],
+            },
+        }
+    )
 
 
 def get_db_path() -> Path:
