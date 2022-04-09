@@ -31,6 +31,7 @@ def handle_json_error(
 async def root(request: web.Request) -> web.Response:
     return web.json_response({"name": "Welcome to the purchases server", "healthy": True})
 
+
 # [POST] api to add new customer
 @router.post("/api/v1/customer")
 @handle_json_error
@@ -57,6 +58,48 @@ async def api_new_customer(request: web.Request) -> web.Response:
             },
         }
     )
+
+
+# [POST] api to add new customer purchase
+@router.post("/api/v1/purchase/{customer_id}")
+@handle_json_error
+async def api_new_purchase(request: web.Request) -> web.Response:
+    status = "ok"
+    post_data = await request.json()
+    purchase_name = post_data["purchase_name"]
+    quantity = post_data["quantity"]
+    customer_id = request.match_info["customer_id"]
+    purchased_on = datetime.now(timezone.utc)
+    db = request.config_dict["DB"]
+
+    async with db.execute("SELECT count(*) as count FROM customer where id = ?",
+                          [request.match_info["customer_id"]]) as cursor:
+        async for row in cursor:
+            if row["count"] < 1:
+                status = "failed"
+    await db.commit()
+    if status == "failed":
+        return web.json_response({"status": status, "data": "Customer doesn't exist"})
+    else:
+        async with db.execute(
+                "INSERT INTO purchases (purchase_name, quantity, date_created, customer_id) VALUES(?, ?, ?, ?)",
+                [purchase_name, quantity, purchased_on, customer_id],
+        ) as cursor:
+            purchase_id = cursor.lastrowid
+        await db.commit()
+        return web.json_response(
+            {
+                "status": status,
+                "data": {
+                    "id": purchase_id,
+                    "purchase_name": purchase_name,
+                    "quantity": quantity,
+                    "customer_id": customer_id,
+                    "purchased_on": purchased_on.strftime("%b %d %Y %H:%M:%S"),
+                },
+            }
+        )
+
 
 def get_db_path() -> Path:
     here = Path.cwd()
