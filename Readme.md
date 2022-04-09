@@ -15,7 +15,10 @@ To stop the server:
 
 `docker-compose down` 
 
-To run the tests:
+To run the tests run:
+
+`pip install -r requirements.txt`
+<br /> 
 
 `pytest test.py` 
 
