@@ -1,12 +1,57 @@
+import asyncio
 import sqlite3
-from pathlib import Path
-
-from typing import AsyncIterator
-
 import aiosqlite
 from aiohttp import web
 
+from pathlib import Path
+
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict
+from datetime import datetime, timezone
+
 router = web.RouteTableDef()
+
+# generic function used as decorator to handle json related errors
+def handle_json_error(
+        func: Callable[[web.Request], Awaitable[web.Response]]
+) -> Callable[[web.Request], Awaitable[web.Response]]:
+    async def handler(request: web.Request) -> web.Response:
+        try:
+            return await func(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as ex:
+            return web.json_response(
+                {"status": "failed", "reason": str(ex)}, status=400
+            )
+
+    return handler
+
+# [POST] api to add new customer
+@router.post("/api/v1/customer")
+@handle_json_error
+async def api_new_customer(request: web.Request) -> web.Response:
+    post_data = await request.json()
+    name = post_data["name"]
+    address = post_data["address"]
+    date_created = datetime.now(timezone.utc)
+    db = request.config_dict["DB"]
+    async with db.execute(
+            "INSERT INTO customer (name, address, date_created) VALUES(?, ?, ?)",
+            [name, address, date_created],
+    ) as cursor:
+        customer_id = cursor.lastrowid
+    await db.commit()
+    return web.json_response(
+        {
+            "status": "ok",
+            "data": {
+                "id": customer_id,
+                "name": name,
+                "address": address,
+                "created_on": date_created.strftime("%b %d %Y %H:%M:%S"),
+            },
+        }
+    )
 
 def get_db_path() -> Path:
     here = Path.cwd()
