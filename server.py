@@ -5,45 +5,13 @@ from aiohttp import web
 
 from pathlib import Path
 
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict
+from typing import Any, AsyncIterator, Dict
 from datetime import datetime, timezone
 
 from middlewares import setup_middlewares
+from models import Purchase
 
 router = web.RouteTableDef()
-
-# # generic function used as decorator to handle json related errors
-# def handle_json_error(
-#         func: Callable[[web.Request], Awaitable[web.Response]]
-# ) -> Callable[[web.Request], Awaitable[web.Response]]:
-#     async def handler(request: web.Request) -> web.Response:
-#         try:
-#             return await func(request)
-#         except asyncio.CancelledError:
-#             raise
-#         except Exception as ex:
-#             return web.json_response(
-#                 {"status": "failed", "reason": str(ex)}, status=400
-#             )
-
-#     return handler
-
-
-# function to fetch purchase data from db
-async def fetch_purchase_from_db(db: aiosqlite.Connection, purchase_id: int) -> Dict[str, Any]:
-    async with db.execute(
-            "SELECT id, purchase_name, quantity, date_created, last_updated FROM purchases WHERE id = ?",
-            [purchase_id]) as cursor:
-        row = await cursor.fetchone()
-        if row is None:
-            raise RuntimeError(f"Purchase {purchase_id} doesn't exist")
-        return {
-            "id": purchase_id,
-            "name": row["purchase_name"],
-            "quantity": row["quantity"],
-            "date_created": row["date_created"],
-            "last_updated": row["last_updated"]
-        }
 
 
 # health check api
@@ -196,16 +164,18 @@ async def api_update_purchase(request: web.Request) -> web.Response:
             f"UPDATE purchases SET {field_names} WHERE id = ?", field_values + [purchase_id]
         )
         await db.commit()
-    new_purchase = await fetch_purchase_from_db(db, purchase_id)
+
+    new_purchase = Purchase(purchase_id)
+    new_purchase_data = await new_purchase.fetch_purchase_from_db(db, purchase_id)
     return web.json_response(
         {
             "status": "ok",
             "data": {
-                "id": new_purchase["id"],
-                "purchase_name": new_purchase["name"],
-                "quantity": new_purchase["quantity"],
-                "purchased_on": new_purchase["date_created"],
-                "last_updated_on": new_purchase["last_updated"],
+                "id": new_purchase_data["id"],
+                "purchase_name": new_purchase_data["name"],
+                "quantity": new_purchase_data["quantity"],
+                "purchased_on": new_purchase_data["date_created"],
+                "last_updated_on": new_purchase_data["last_updated"],
             },
         }
     )
