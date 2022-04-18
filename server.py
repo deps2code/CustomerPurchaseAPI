@@ -8,23 +8,25 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
 from datetime import datetime, timezone
 
+from middlewares import setup_middlewares
+
 router = web.RouteTableDef()
 
-# generic function used as decorator to handle json related errors
-def handle_json_error(
-        func: Callable[[web.Request], Awaitable[web.Response]]
-) -> Callable[[web.Request], Awaitable[web.Response]]:
-    async def handler(request: web.Request) -> web.Response:
-        try:
-            return await func(request)
-        except asyncio.CancelledError:
-            raise
-        except Exception as ex:
-            return web.json_response(
-                {"status": "failed", "reason": str(ex)}, status=400
-            )
+# # generic function used as decorator to handle json related errors
+# def handle_json_error(
+#         func: Callable[[web.Request], Awaitable[web.Response]]
+# ) -> Callable[[web.Request], Awaitable[web.Response]]:
+#     async def handler(request: web.Request) -> web.Response:
+#         try:
+#             return await func(request)
+#         except asyncio.CancelledError:
+#             raise
+#         except Exception as ex:
+#             return web.json_response(
+#                 {"status": "failed", "reason": str(ex)}, status=400
+#             )
 
-    return handler
+#     return handler
 
 
 # function to fetch purchase data from db
@@ -52,7 +54,6 @@ async def root(request: web.Request) -> web.Response:
 
 # [POST] api to add new customer
 @router.post("/api/v1/customer")
-@handle_json_error
 async def api_new_customer(request: web.Request) -> web.Response:
     post_data = await request.json()
     name = post_data["name"]
@@ -80,7 +81,6 @@ async def api_new_customer(request: web.Request) -> web.Response:
 
 # [POST] api to add new customer purchase
 @router.post("/api/v1/purchase/{customer_id}")
-@handle_json_error
 async def api_new_purchase(request: web.Request) -> web.Response:
     status = "ok"
     post_data = await request.json()
@@ -99,6 +99,8 @@ async def api_new_purchase(request: web.Request) -> web.Response:
     if status == "failed":
         return web.json_response({"status": status, "data": "Customer doesn't exist"})
     else:
+        if quantity <= 0:
+            return web.json_response({"status": status, "data": "Quantity can't be less than 1"})
         async with db.execute(
                 "INSERT INTO purchases (purchase_name, quantity, date_created, customer_id) VALUES(?, ?, ?, ?)",
                 [purchase_name, quantity, purchased_on, customer_id],
@@ -121,7 +123,6 @@ async def api_new_purchase(request: web.Request) -> web.Response:
 
 # [GET] api to list customer purchases
 @router.get("/api/v1/purchase/{customer_id}")
-@handle_json_error
 async def api_list_purchase(request: web.Request) -> web.Response:
     response = []
     status = "ok"
@@ -152,7 +153,6 @@ async def api_list_purchase(request: web.Request) -> web.Response:
 
 # [DELETE] api to remove customer purchases
 @router.delete("/api/v1/purchase/{customer_id}")
-@handle_json_error
 async def api_del_purchase(request: web.Request) -> web.Response:
     customer_id = request.match_info["customer_id"]
     req_data = await request.json()
@@ -175,7 +175,6 @@ async def api_del_purchase(request: web.Request) -> web.Response:
 
 # [PATCH] api to update customer purchase
 @router.patch("/api/v1/purchase/{purchase_id}")
-@handle_json_error
 async def api_update_purchase(request: web.Request) -> web.Response:
     purchase_id = request.match_info["purchase_id"]
     patch_data = await request.json()
@@ -235,6 +234,7 @@ async def init_app() -> web.Application:
     app = web.Application()
     app.add_routes(router)
     app.cleanup_ctx.append(init_db)
+    setup_middlewares(app)
     return app
 
 
